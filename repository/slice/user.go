@@ -1,9 +1,12 @@
 package slice
 
 import (
+	"context"
+	"errors"
+	"time"
+
 	"advance2/entity"
 	"advance2/service"
-	"time"
 )
 
 // userRepository adalah implementasi dari IUserRepository yang menggunakan slice untuk menyimpan data pengguna
@@ -19,52 +22,47 @@ func NewUserRepository(db []entity.User) service.IUserRepository {
 	}
 }
 
-// CreateUser menambahkan pengguna baru ke repository
-func (r *userRepository) CreateUser(user *entity.User) entity.User {
-	user.ID = r.nextID          // Set ID pengguna baru
-	r.nextID++                  // Increment ID berikutnya
-	user.CreatedAt = time.Now() // Set waktu pembuatan
-	user.UpdatedAt = time.Now() // Set waktu pembaruan
-	r.db = append(r.db, *user)  // Tambahkan pengguna ke slice
-	return *user                // Kembalikan pengguna yang dibuat
+func (r *userRepository) CreateUser(ctx context.Context, user *entity.User) (entity.User, error) {
+	user.ID = r.nextID
+	r.nextID++
+	user.CreatedAt = time.Now()
+	user.UpdatedAt = time.Now()
+	r.db = append(r.db, *user)
+	return *user, nil
 }
 
-// GetUserByID mencari pengguna berdasarkan ID
-func (r *userRepository) GetUserByID(id int) (entity.User, bool) {
+func (r *userRepository) GetUserByID(ctx context.Context, id int) (entity.User, error) {
 	for _, user := range r.db {
 		if user.ID == id {
-			return user, true // Kembalikan pengguna jika ditemukan
+			return user, nil
 		}
 	}
-	return entity.User{}, false // Kembalikan false jika tidak ditemukan
+	return entity.User{}, errors.New("user not found")
 }
 
-// UpdateUser memperbarui pengguna berdasarkan ID
-func (r *userRepository) UpdateUser(id int, user entity.User) (entity.User, bool) {
+func (r *userRepository) UpdateUser(ctx context.Context, id int, user entity.User) (entity.User, error) {
 	for i, u := range r.db {
 		if u.ID == id {
-			user.ID = id                 // Pertahankan ID yang sama
-			user.CreatedAt = u.CreatedAt // Pertahankan waktu pembuatan asli
-			user.UpdatedAt = time.Now()  // Set waktu pembaruan
-			r.db[i] = user               // Perbarui pengguna di slice
-			return user, true            // Kembalikan pengguna yang diperbarui
+			user.ID = id
+			user.CreatedAt = u.CreatedAt
+			user.UpdatedAt = time.Now()
+			r.db[i] = user
+			return user, nil
 		}
 	}
-	return entity.User{}, false // Kembalikan false jika pengguna tidak ditemukan
+	return entity.User{}, errors.New("user not found")
 }
 
-// DeleteUser menghapus pengguna berdasarkan ID
-func (r *userRepository) DeleteUser(id int) bool {
+func (r *userRepository) DeleteUser(ctx context.Context, id int) error {
 	for i, user := range r.db {
 		if user.ID == id {
-			r.db = append(r.db[:i], r.db[i+1:]...) // Hapus pengguna dari slice
-			return true                            // Kembalikan true jika berhasil
+			r.db = append(r.db[:i], r.db[i+1:]...)
+			return nil
 		}
 	}
-	return false // Kembalikan false jika pengguna tidak ditemukan
+	return errors.New("user not found")
 }
 
-// GetAllUsers mengembalikan semua pengguna
-func (r *userRepository) GetAllUsers() []entity.User {
-	return r.db // Kembalikan slice semua pengguna
+func (r *userRepository) GetAllUsers(ctx context.Context) ([]entity.User, error) {
+	return r.db, nil
 }

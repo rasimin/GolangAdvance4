@@ -1,6 +1,8 @@
 package entity
 
-import "time"
+import (
+	"time"
+)
 
 type User struct {
 	ID        int       `json:"id"`                             // ID pengguna

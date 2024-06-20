@@ -1,288 +1,317 @@
 package handler_test
 
 import (
-	"advance2/test/mock/service"
-	"bytes"
-	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 
 	"advance2/entity"
 	"advance2/handler"
+	mock_service "advance2/test/mock/service"
 
 	"github.com/gin-gonic/gin"
+	"github.com/golang/mock/gomock"
 )
 
-func TestGetAllUserHandler(t *testing.T) {
-	t.Run("Positive Test Case", func(t *testing.T) {
-		gin.SetMode(gin.TestMode)
+func TestUserHandler_CreateUser(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
 
-		mockUserService := &service.MockUserService{}
-		userHandler := handler.NewUserHandler(mockUserService)
+	mockService := mock_service.NewMockIUserService(ctrl)
+	userHandler := handler.NewUserHandler(mockService)
 
-		r := gin.Default()
-		r.GET("/users", userHandler.GetAllUsers)
+	gin.SetMode(gin.TestMode)
 
-		req, _ := http.NewRequest("GET", "/users", nil)
+	t.Run("ValidRequest", func(t *testing.T) {
+		mockService.EXPECT().CreateUser(gomock.Any(), &entity.User{
+			Name:     "John Doe",
+			Email:    "john@example.com",
+			Password: "password",
+		}).Return(entity.User{
+			Name:     "John Doe",
+			Email:    "john@example.com",
+			Password: "password",
+		}, nil)
 
-		w := httptest.NewRecorder()
-		r.ServeHTTP(w, req)
+		req := httptest.NewRequest(http.MethodPost, "/users", strings.NewReader(`{"name":"John Doe","email":"john@example.com","password":"password"}`))
+		req.Header.Set("Content-Type", "application/json")
+		resp := httptest.NewRecorder()
+		router := gin.Default()
+		router.POST("/users", userHandler.CreateUser)
 
-		require.Equal(t, http.StatusOK, w.Code)
+		router.ServeHTTP(resp, req)
 
-		var users []entity.User
-		err := json.Unmarshal(w.Body.Bytes(), &users)
-		require.NoError(t, err)
-		require.Equal(t, 2, len(users))
+		require.Equal(t, http.StatusCreated, resp.Code)
+		require.JSONEq(t, `{"id":0,"name":"John Doe","email":"john@example.com","password":"password","created_at":"0001-01-01T00:00:00Z","updated_at":"0001-01-01T00:00:00Z"}`, resp.Body.String())
+	})
+
+	t.Run("InvalidPayload_MissingName", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/users", strings.NewReader(`{"email":"john@example.com","password":"password"}`))
+		req.Header.Set("Content-Type", "application/json")
+		resp := httptest.NewRecorder()
+		router := gin.Default()
+		router.POST("/users", userHandler.CreateUser)
+
+		router.ServeHTTP(resp, req)
+
+		require.Equal(t, http.StatusBadRequest, resp.Code)
+		require.JSONEq(t, `{"error":"name is mandatory"}`, resp.Body.String())
+	})
+
+	t.Run("InvalidPayload_MissingEmail", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/users", strings.NewReader(`{"name":"john","password":"password"}`))
+		req.Header.Set("Content-Type", "application/json")
+		resp := httptest.NewRecorder()
+		router := gin.Default()
+		router.POST("/users", userHandler.CreateUser)
+
+		router.ServeHTTP(resp, req)
+
+		require.Equal(t, http.StatusBadRequest, resp.Code)
+		require.JSONEq(t, `{"error":"email is mandatory"}`, resp.Body.String())
+	})
+
+	t.Run("ServiceError", func(t *testing.T) {
+		mockService.EXPECT().CreateUser(gomock.Any(), &entity.User{
+			Name:     "John Doe",
+			Email:    "john@example.com",
+			Password: "password",
+		}).Return(entity.User{}, errors.New("some service error"))
+
+		req := httptest.NewRequest(http.MethodPost, "/users", strings.NewReader(`{"name":"John Doe","email":"john@example.com","password":"password"}`))
+		req.Header.Set("Content-Type", "application/json")
+		resp := httptest.NewRecorder()
+		router := gin.Default()
+		router.POST("/users", userHandler.CreateUser)
+
+		router.ServeHTTP(resp, req)
+
+		require.Equal(t, http.StatusBadRequest, resp.Code)
+		require.JSONEq(t, `{"error":"some service error"}`, resp.Body.String())
 	})
 }
 
-func TestCreateUserHandler(t *testing.T) {
-	t.Run("Positive Test Case", func(t *testing.T) {
-		gin.SetMode(gin.TestMode)
+func TestUserHandler_GetUser(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
 
-		mockUserService := &service.MockUserService{}
-		userHandler := handler.NewUserHandler(mockUserService)
+	mockService := mock_service.NewMockIUserService(ctrl)
+	userHandler := handler.NewUserHandler(mockService)
 
-		r := gin.Default()
-		r.POST("/users", userHandler.CreateUser)
+	gin.SetMode(gin.TestMode)
 
-		user := entity.User{Name: "Test User", Email: "test@example.com", Password: "testpass"}
-		jsonUser, _ := json.Marshal(user)
+	t.Run("ValidRequest", func(t *testing.T) {
+		mockService.EXPECT().GetUserByID(gomock.Any(), 1).Return(entity.User{
+			ID:    1,
+			Name:  "John Doe",
+			Email: "john@example.com",
+		}, nil)
 
-		req, _ := http.NewRequest("POST", "/users", bytes.NewBuffer(jsonUser))
-		req.Header.Set("Content-Type", "application/json")
+		req := httptest.NewRequest(http.MethodGet, "/users/1", nil)
+		resp := httptest.NewRecorder()
+		router := gin.Default()
+		router.GET("/users/:id", userHandler.GetUser)
 
-		w := httptest.NewRecorder()
-		r.ServeHTTP(w, req)
+		router.ServeHTTP(resp, req)
 
-		require.Equal(t, http.StatusCreated, w.Code)
-
-		var createdUser entity.User
-		err := json.Unmarshal(w.Body.Bytes(), &createdUser)
-		require.NoError(t, err)
-		require.Equal(t, user.Name, createdUser.Name)
-		require.Equal(t, user.Email, createdUser.Email)
+		require.Equal(t, http.StatusOK, resp.Code)
+		require.JSONEq(t, `{"id":1,"name":"John Doe","email":"john@example.com","password":"","created_at":"0001-01-01T00:00:00Z","updated_at":"0001-01-01T00:00:00Z"}`, resp.Body.String())
 	})
 
-	t.Run("Negative Test Case", func(t *testing.T) {
-		gin.SetMode(gin.TestMode)
+	t.Run("InvalidID", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/users/abc", nil)
+		resp := httptest.NewRecorder()
+		router := gin.Default()
+		router.GET("/users/:id", userHandler.GetUser)
 
-		mockUserService := &service.MockUserService{}
+		router.ServeHTTP(resp, req)
 
-		userHandler := handler.NewUserHandler(mockUserService)
-
-		r := gin.Default()
-		r.POST("/users", userHandler.CreateUser)
-
-		req, _ := http.NewRequest("POST", "/users", bytes.NewBuffer([]byte("invalid json")))
-		req.Header.Set("Content-Type", "application/json")
-
-		w := httptest.NewRecorder()
-		r.ServeHTTP(w, req)
-
-		require.Equal(t, http.StatusBadRequest, w.Code)
-	})
-}
-
-func TestGetUserHandler(t *testing.T) {
-	t.Run("Positive Test Case", func(t *testing.T) {
-		gin.SetMode(gin.TestMode)
-
-		mockUserService := &service.MockUserService{}
-		userHandler := handler.NewUserHandler(mockUserService)
-
-		r := gin.Default()
-		r.GET("/users/:id", userHandler.GetUser)
-
-		req, _ := http.NewRequest("GET", "/users/1", nil)
-
-		w := httptest.NewRecorder()
-		r.ServeHTTP(w, req)
-
-		require.Equal(t, http.StatusOK, w.Code)
-
-		var user entity.User
-		err := json.Unmarshal(w.Body.Bytes(), &user)
-		require.NoError(t, err)
-		require.Equal(t, 1, user.ID)
+		require.Equal(t, http.StatusBadRequest, resp.Code)
+		require.JSONEq(t, `{"error":"Invalid ID"}`, resp.Body.String())
 	})
 
-	t.Run("Negative Test Case - no data", func(t *testing.T) {
-		gin.SetMode(gin.TestMode)
+	t.Run("UserNotFound", func(t *testing.T) {
+		mockService.EXPECT().GetUserByID(gomock.Any(), 1).Return(entity.User{}, errors.New("user not found"))
 
-		mockUserService := &service.MockUserService{}
-		userHandler := handler.NewUserHandler(mockUserService)
+		req := httptest.NewRequest(http.MethodGet, "/users/1", nil)
+		resp := httptest.NewRecorder()
+		router := gin.Default()
+		router.GET("/users/:id", userHandler.GetUser)
 
-		r := gin.Default()
-		r.GET("/users/:id", userHandler.GetUser)
+		router.ServeHTTP(resp, req)
 
-		// Using invalid user ID
-		req, _ := http.NewRequest("GET", "/users/100", nil)
-
-		w := httptest.NewRecorder()
-		r.ServeHTTP(w, req)
-
-		require.Equal(t, http.StatusNotFound, w.Code)
-	})
-
-	t.Run("Negative Test Case - cannot convert to integer", func(t *testing.T) {
-		gin.SetMode(gin.TestMode)
-
-		mockUserService := &service.MockUserService{}
-		userHandler := handler.NewUserHandler(mockUserService)
-
-		r := gin.Default()
-		r.GET("/users/:id", userHandler.GetUser)
-
-		// Using invalid user ID
-		req, _ := http.NewRequest("GET", "/users/abc", nil)
-
-		w := httptest.NewRecorder()
-		r.ServeHTTP(w, req)
-
-		require.Equal(t, http.StatusBadRequest, w.Code)
+		require.Equal(t, http.StatusNotFound, resp.Code)
+		require.JSONEq(t, `{"error":"User not found"}`, resp.Body.String())
 	})
 }
 
-func TestUpdateUserHandler(t *testing.T) {
-	t.Run("Positive Test Case", func(t *testing.T) {
-		gin.SetMode(gin.TestMode)
+func TestUserHandler_UpdateUser(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
 
-		mockUserService := &service.MockUserService{}
-		userHandler := handler.NewUserHandler(mockUserService)
+	mockService := mock_service.NewMockIUserService(ctrl)
+	userHandler := handler.NewUserHandler(mockService)
 
-		r := gin.Default()
-		r.PUT("/users/:id", userHandler.UpdateUser)
+	gin.SetMode(gin.TestMode)
 
-		updatedUser := entity.User{ID: 1, Name: "Updated User", Email: "updated@example.com", Password: "updatedpass"}
-		jsonUser, _ := json.Marshal(updatedUser)
+	t.Run("ValidRequest", func(t *testing.T) {
+		mockService.EXPECT().UpdateUser(gomock.Any(), 1, entity.User{
+			Name:  "John Doe",
+			Email: "john@example.com",
+		}).Return(entity.User{
+			ID:    1,
+			Name:  "John Doe",
+			Email: "john@example.com",
+		}, nil)
 
-		req, _ := http.NewRequest("PUT", "/users/1", bytes.NewBuffer(jsonUser))
+		req := httptest.NewRequest(http.MethodPut, "/users/1", strings.NewReader(`{"name":"John Doe","email":"john@example.com"}`))
 		req.Header.Set("Content-Type", "application/json")
+		resp := httptest.NewRecorder()
+		router := gin.Default()
+		router.PUT("/users/:id", userHandler.UpdateUser)
 
-		w := httptest.NewRecorder()
-		r.ServeHTTP(w, req)
+		router.ServeHTTP(resp, req)
 
-		require.Equal(t, http.StatusOK, w.Code)
-
-		var returnedUser entity.User
-		err := json.Unmarshal(w.Body.Bytes(), &returnedUser)
-		require.NoError(t, err)
-		require.Equal(t, updatedUser.Name, returnedUser.Name)
-		require.Equal(t, updatedUser.Email, returnedUser.Email)
+		require.Equal(t, http.StatusOK, resp.Code)
+		require.JSONEq(t, `{"id":1,"name":"John Doe","email":"john@example.com","password":"","created_at":"0001-01-01T00:00:00Z","updated_at":"0001-01-01T00:00:00Z"}`, resp.Body.String())
 	})
 
-	t.Run("Negative Test Case - invalid id", func(t *testing.T) {
-		gin.SetMode(gin.TestMode)
-
-		mockUserService := &service.MockUserService{}
-		userHandler := handler.NewUserHandler(mockUserService)
-
-		r := gin.Default()
-		r.PUT("/users/:id", userHandler.UpdateUser)
-
-		req, _ := http.NewRequest("PUT", "/users/abc", bytes.NewBuffer([]byte("invalid json")))
+	t.Run("InvalidID", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPut, "/users/abc", strings.NewReader(`{"name":"John Doe","email":"john@example.com"}`))
 		req.Header.Set("Content-Type", "application/json")
+		resp := httptest.NewRecorder()
+		router := gin.Default()
+		router.PUT("/users/:id", userHandler.UpdateUser)
 
-		w := httptest.NewRecorder()
-		r.ServeHTTP(w, req)
+		router.ServeHTTP(resp, req)
 
-		require.Equal(t, http.StatusBadRequest, w.Code)
+		require.Equal(t, http.StatusBadRequest, resp.Code)
+		require.JSONEq(t, `{"error":"Invalid ID"}`, resp.Body.String())
 	})
 
-	t.Run("Negative Test Case - invalid json", func(t *testing.T) {
-		gin.SetMode(gin.TestMode)
-
-		mockUserService := &service.MockUserService{}
-		userHandler := handler.NewUserHandler(mockUserService)
-
-		r := gin.Default()
-		r.PUT("/users/:id", userHandler.UpdateUser)
-
-		req, _ := http.NewRequest("PUT", "/users/1", bytes.NewBuffer([]byte("invalid json")))
+	t.Run("InvalidPayload", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPut, "/users/1", strings.NewReader(`{"email":"john@example.com"}`))
 		req.Header.Set("Content-Type", "application/json")
+		resp := httptest.NewRecorder()
+		router := gin.Default()
+		router.PUT("/users/:id", userHandler.UpdateUser)
 
-		w := httptest.NewRecorder()
-		r.ServeHTTP(w, req)
+		router.ServeHTTP(resp, req)
 
-		require.Equal(t, http.StatusBadRequest, w.Code)
+		require.Equal(t, http.StatusBadRequest, resp.Code)
+		require.JSONEq(t, `{"error":"name is mandatory"}`, resp.Body.String())
 	})
 
-	t.Run("Negative Test Case - not found", func(t *testing.T) {
-		gin.SetMode(gin.TestMode)
+	t.Run("ServiceError", func(t *testing.T) {
+		mockService.EXPECT().UpdateUser(gomock.Any(), 1, entity.User{
+			Name:  "John Doe",
+			Email: "john@example.com",
+		}).Return(entity.User{}, errors.New("some service error"))
 
-		mockUserService := &service.MockUserService{}
-		userHandler := handler.NewUserHandler(mockUserService)
-
-		r := gin.Default()
-		r.PUT("/users/:id", userHandler.UpdateUser)
-
-		invalidUser := entity.User{ID: 100, Name: "Invalid User"} // User with ID 100 doesn't exist
-		jsonUser, _ := json.Marshal(invalidUser)
-
-		req, _ := http.NewRequest("PUT", "/users/100", bytes.NewBuffer(jsonUser))
+		req := httptest.NewRequest(http.MethodPut, "/users/1", strings.NewReader(`{"name":"John Doe","email":"john@example.com"}`))
 		req.Header.Set("Content-Type", "application/json")
+		resp := httptest.NewRecorder()
+		router := gin.Default()
+		router.PUT("/users/:id", userHandler.UpdateUser)
 
-		w := httptest.NewRecorder()
-		r.ServeHTTP(w, req)
+		router.ServeHTTP(resp, req)
 
-		require.Equal(t, http.StatusNotFound, w.Code)
+		require.Equal(t, http.StatusNotFound, resp.Code)
+		require.JSONEq(t, `{"error":"some service error"}`, resp.Body.String())
 	})
 }
 
-func TestDeleteUserHandler(t *testing.T) {
-	t.Run("Positive Test Case", func(t *testing.T) {
-		gin.SetMode(gin.TestMode)
+func TestUserHandler_DeleteUser(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
 
-		mockUserService := &service.MockUserService{}
-		userHandler := handler.NewUserHandler(mockUserService)
+	mockService := mock_service.NewMockIUserService(ctrl)
+	userHandler := handler.NewUserHandler(mockService)
 
-		r := gin.Default()
-		r.DELETE("/users/:id", userHandler.DeleteUser)
+	gin.SetMode(gin.TestMode)
 
-		req, _ := http.NewRequest("DELETE", "/users/1", nil)
+	t.Run("ValidRequest", func(t *testing.T) {
+		mockService.EXPECT().DeleteUser(gomock.Any(), 1).Return(nil)
 
-		w := httptest.NewRecorder()
-		r.ServeHTTP(w, req)
+		req := httptest.NewRequest(http.MethodDelete, "/users/1", nil)
+		resp := httptest.NewRecorder()
+		router := gin.Default()
+		router.DELETE("/users/:id", userHandler.DeleteUser)
 
-		require.Equal(t, http.StatusOK, w.Code)
+		router.ServeHTTP(resp, req)
+
+		require.Equal(t, http.StatusOK, resp.Code)
+		require.JSONEq(t, `{"message":"User deleted"}`, resp.Body.String())
 	})
 
-	t.Run("Negative Test Case - Cannot Convert Int to String", func(t *testing.T) {
-		gin.SetMode(gin.TestMode)
+	t.Run("InvalidID", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodDelete, "/users/abc", nil)
+		resp := httptest.NewRecorder()
+		router := gin.Default()
+		router.DELETE("/users/:id", userHandler.DeleteUser)
 
-		mockUserService := &service.MockUserService{}
-		userHandler := handler.NewUserHandler(mockUserService)
+		router.ServeHTTP(resp, req)
 
-		r := gin.Default()
-		r.DELETE("/users/:id", userHandler.DeleteUser)
-
-		req, _ := http.NewRequest("DELETE", "/users/abc", nil)
-
-		w := httptest.NewRecorder()
-		r.ServeHTTP(w, req)
-
-		require.Equal(t, http.StatusBadRequest, w.Code)
+		require.Equal(t, http.StatusBadRequest, resp.Code)
+		require.JSONEq(t, `{"error":"Invalid ID"}`, resp.Body.String())
 	})
 
-	t.Run("Negative Test Case - Not Found", func(t *testing.T) {
-		gin.SetMode(gin.TestMode)
+	t.Run("ServiceError", func(t *testing.T) {
+		mockService.EXPECT().DeleteUser(gomock.Any(), 1).Return(errors.New("some service error"))
 
-		mockUserService := &service.MockUserService{}
-		userHandler := handler.NewUserHandler(mockUserService)
+		req := httptest.NewRequest(http.MethodDelete, "/users/1", nil)
+		resp := httptest.NewRecorder()
+		router := gin.Default()
+		router.DELETE("/users/:id", userHandler.DeleteUser)
 
-		r := gin.Default()
-		r.DELETE("/users/:id", userHandler.DeleteUser)
+		router.ServeHTTP(resp, req)
 
-		req, _ := http.NewRequest("DELETE", "/users/100", nil)
+		require.Equal(t, http.StatusNotFound, resp.Code)
+		require.JSONEq(t, `{"error":"some service error"}`, resp.Body.String())
+	})
+}
 
-		w := httptest.NewRecorder()
-		r.ServeHTTP(w, req)
+func TestUserHandler_GetAllUsers(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
 
-		require.Equal(t, http.StatusNotFound, w.Code)
+	mockService := mock_service.NewMockIUserService(ctrl)
+	userHandler := handler.NewUserHandler(mockService)
+
+	gin.SetMode(gin.TestMode)
+
+	t.Run("ValidRequest", func(t *testing.T) {
+		mockService.EXPECT().GetAllUsers(gomock.Any()).Return([]entity.User{
+			{ID: 1, Name: "John Doe", Email: "john@example.com"},
+			{ID: 2, Name: "Jane Doe", Email: "jane@example.com"},
+		}, nil)
+
+		req := httptest.NewRequest(http.MethodGet, "/users", nil)
+		resp := httptest.NewRecorder()
+		router := gin.Default()
+		router.GET("/users", userHandler.GetAllUsers)
+
+		router.ServeHTTP(resp, req)
+
+		require.Equal(t, http.StatusOK, resp.Code)
+		require.JSONEq(t, `[{"id":1,"name":"John Doe","email":"john@example.com","password":"","created_at":"0001-01-01T00:00:00Z","updated_at":"0001-01-01T00:00:00Z"},{"id":2,"name":"Jane Doe","email":"jane@example.com","password":"","created_at":"0001-01-01T00:00:00Z","updated_at":"0001-01-01T00:00:00Z"}]`, resp.Body.String())
+	})
+
+	t.Run("ServiceError", func(t *testing.T) {
+		mockService.EXPECT().GetAllUsers(gomock.Any()).Return(nil, errors.New("some service error"))
+
+		req := httptest.NewRequest(http.MethodGet, "/users", nil)
+		resp := httptest.NewRecorder()
+		router := gin.Default()
+		router.GET("/users", userHandler.GetAllUsers)
+
+		router.ServeHTTP(resp, req)
+
+		require.Equal(t, http.StatusBadRequest, resp.Code)
+		require.JSONEq(t, `{"error":"some service error"}`, resp.Body.String())
 	})
 }

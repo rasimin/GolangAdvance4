@@ -2,25 +2,26 @@ package service
 
 import (
 	"advance2/entity"
+	"context"
 	"fmt"
 )
 
 // IUserService mendefinisikan interface untuk layanan pengguna
 type IUserService interface {
-	CreateUser(user *entity.User) entity.User
-	GetUserByID(id int) (entity.User, error)
-	UpdateUser(id int, user entity.User) (entity.User, error)
-	DeleteUser(id int) error
-	GetAllUsers() []entity.User
+	CreateUser(ctx context.Context, user *entity.User) (entity.User, error)
+	GetUserByID(ctx context.Context, id int) (entity.User, error)
+	UpdateUser(ctx context.Context, id int, user entity.User) (entity.User, error)
+	DeleteUser(ctx context.Context, id int) error
+	GetAllUsers(ctx context.Context) ([]entity.User, error)
 }
 
 // IUserRepository mendefinisikan interface untuk repository pengguna
 type IUserRepository interface {
-	CreateUser(user *entity.User) entity.User
-	GetUserByID(id int) (entity.User, bool)
-	UpdateUser(id int, user entity.User) (entity.User, bool)
-	DeleteUser(id int) bool
-	GetAllUsers() []entity.User
+	CreateUser(ctx context.Context, user *entity.User) (entity.User, error)
+	GetUserByID(ctx context.Context, id int) (entity.User, error)
+	UpdateUser(ctx context.Context, id int, user entity.User) (entity.User, error)
+	DeleteUser(ctx context.Context, id int) error
+	GetAllUsers(ctx context.Context) ([]entity.User, error)
 }
 
 // userService adalah implementasi dari IUserService yang menggunakan IUserRepository
@@ -33,38 +34,52 @@ func NewUserService(userRepo IUserRepository) IUserService {
 	return &userService{userRepo: userRepo}
 }
 
-// CreateUser membuat pengguna baru dengan menggunakan repository
-func (s *userService) CreateUser(user *entity.User) entity.User {
-	return s.userRepo.CreateUser(user)
+// CreateUser membuat pengguna baru
+func (s *userService) CreateUser(ctx context.Context, user *entity.User) (entity.User, error) {
+	// Memanggil CreateUser dari repository untuk membuat pengguna baru
+	createdUser, err := s.userRepo.CreateUser(ctx, user)
+	if err != nil {
+		return entity.User{}, fmt.Errorf("gagal membuat pengguna: %v", err)
+	}
+	return createdUser, nil
 }
 
-// GetUserByID mendapatkan pengguna berdasarkan ID, mengembalikan error jika tidak ditemukan
-func (s *userService) GetUserByID(id int) (entity.User, error) {
-	user, found := s.userRepo.GetUserByID(id)
-	if !found {
-		return entity.User{}, fmt.Errorf("user not found")
+// GetUserByID mendapatkan pengguna berdasarkan ID
+func (s *userService) GetUserByID(ctx context.Context, id int) (entity.User, error) {
+	// Memanggil GetUserByID dari repository untuk mendapatkan pengguna berdasarkan ID
+	user, err := s.userRepo.GetUserByID(ctx, id)
+	if err != nil {
+		return entity.User{}, fmt.Errorf("gagal mendapatkan pengguna berdasarkan ID: %v", err)
 	}
 	return user, nil
 }
 
-// UpdateUser memperbarui pengguna berdasarkan ID, mengembalikan error jika tidak ditemukan
-func (s *userService) UpdateUser(id int, user entity.User) (entity.User, error) {
-	updatedUser, found := s.userRepo.UpdateUser(id, user)
-	if !found {
-		return entity.User{}, fmt.Errorf("user not found")
+// UpdateUser memperbarui data pengguna
+func (s *userService) UpdateUser(ctx context.Context, id int, user entity.User) (entity.User, error) {
+	// Memanggil UpdateUser dari repository untuk memperbarui data pengguna
+	updatedUser, err := s.userRepo.UpdateUser(ctx, id, user)
+	if err != nil {
+		return entity.User{}, fmt.Errorf("gagal memperbarui pengguna: %v", err)
 	}
 	return updatedUser, nil
 }
 
-// DeleteUser menghapus pengguna berdasarkan ID, mengembalikan error jika tidak ditemukan
-func (s *userService) DeleteUser(id int) error {
-	if !s.userRepo.DeleteUser(id) {
-		return fmt.Errorf("user not found")
+// DeleteUser menghapus pengguna berdasarkan ID
+func (s *userService) DeleteUser(ctx context.Context, id int) error {
+	// Memanggil DeleteUser dari repository untuk menghapus pengguna berdasarkan ID
+	err := s.userRepo.DeleteUser(ctx, id)
+	if err != nil {
+		return fmt.Errorf("gagal menghapus pengguna: %v", err)
 	}
 	return nil
 }
 
-// GetAllUsers mengembalikan semua pengguna yang ada di repository
-func (s *userService) GetAllUsers() []entity.User {
-	return s.userRepo.GetAllUsers()
+// GetAllUsers mendapatkan semua pengguna
+func (s *userService) GetAllUsers(ctx context.Context) ([]entity.User, error) {
+	// Memanggil GetAllUsers dari repository untuk mendapatkan semua pengguna
+	users, err := s.userRepo.GetAllUsers(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("gagal mendapatkan semua pengguna: %v", err)
+	}
+	return users, nil
 }
