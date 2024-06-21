@@ -2,7 +2,7 @@
 package router_test
 
 import (
-	"advance2/test/mock/handler"
+	mock_handler "advance2/test/mock/handler"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -19,12 +19,12 @@ func TestPublicRoutes(t *testing.T) {
 	// Buat router gin baru
 	r := gin.Default()
 	// Buat mock user handler
-	mockUserHandler := &handler.MockUserHandler{}
+	mockUserHandler := &mock_handler.MockIUserHandler{}
 	// Set up router dengan mock handler
 	router.SetupRouter(r, mockUserHandler)
 
 	// Test GET /users/:id
-	t.Run("GET /users/:id", func(t *testing.T) {
+	t.Run("GET /users/:i d", func(t *testing.T) {
 		req, _ := http.NewRequest(http.MethodGet, "/users/1", nil)
 		w := httptest.NewRecorder()
 		r.ServeHTTP(w, req)
@@ -54,7 +54,7 @@ func TestPrivateRoutes(t *testing.T) {
 	// Buat router gin baru
 	r := gin.Default()
 	// Buat mock user handler
-	mockUserHandler := &handler.MockUserHandler{}
+	mockUserHandler := &mock_handler.MockIUserHandler{}
 	// Set up router dengan mock handler
 	router.SetupRouter(r, mockUserHandler)
 
@@ -109,7 +109,7 @@ func TestPrivateRoutesUnauthorized(t *testing.T) {
 	// Buat router gin baru
 	r := gin.Default()
 	// Buat mock user handler
-	mockUserHandler := &handler.MockUserHandler{}
+	mockUserHandler := &mock_handler.MockIUserHandler{}
 	// Set up router dengan mock handler
 	router.SetupRouter(r, mockUserHandler)
 

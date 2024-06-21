@@ -14,6 +14,7 @@ func SetupRouter(r *gin.Engine, userHandler handler.IUserHandler) {
 	usersPublicEndpoint := r.Group("/users")
 	// Rute untuk mendapatkan pengguna berdasarkan ID
 	usersPublicEndpoint.GET("/:id", userHandler.GetUser)
+	usersPublicEndpoint.GET("/email/:email", userHandler.GetUserByEmail)
 	// Rute untuk mendapatkan semua pengguna
 	usersPublicEndpoint.GET("", userHandler.GetAllUsers)
 	usersPublicEndpoint.GET("/", userHandler.GetAllUsers)

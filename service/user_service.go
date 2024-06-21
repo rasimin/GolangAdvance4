@@ -10,6 +10,7 @@ import (
 type IUserService interface {
 	CreateUser(ctx context.Context, user *entity.User) (entity.User, error)
 	GetUserByID(ctx context.Context, id int) (entity.User, error)
+	GetUserByEmail(ctx context.Context, id string) (entity.User, error)
 	UpdateUser(ctx context.Context, id int, user entity.User) (entity.User, error)
 	DeleteUser(ctx context.Context, id int) error
 	GetAllUsers(ctx context.Context) ([]entity.User, error)
@@ -19,6 +20,7 @@ type IUserService interface {
 type IUserRepository interface {
 	CreateUser(ctx context.Context, user *entity.User) (entity.User, error)
 	GetUserByID(ctx context.Context, id int) (entity.User, error)
+	GetUserByEmail(ctx context.Context, id string) (entity.User, error)
 	UpdateUser(ctx context.Context, id int, user entity.User) (entity.User, error)
 	DeleteUser(ctx context.Context, id int) error
 	GetAllUsers(ctx context.Context) ([]entity.User, error)
@@ -48,6 +50,16 @@ func (s *userService) CreateUser(ctx context.Context, user *entity.User) (entity
 func (s *userService) GetUserByID(ctx context.Context, id int) (entity.User, error) {
 	// Memanggil GetUserByID dari repository untuk mendapatkan pengguna berdasarkan ID
 	user, err := s.userRepo.GetUserByID(ctx, id)
+	if err != nil {
+		return entity.User{}, fmt.Errorf("gagal mendapatkan pengguna berdasarkan ID: %v", err)
+	}
+	return user, nil
+}
+
+// GetUserByID mendapatkan pengguna berdasarkan ID
+func (s *userService) GetUserByEmail(ctx context.Context, email string) (entity.User, error) {
+	// Memanggil GetUserByID dari repository untuk mendapatkan pengguna berdasarkan ID
+	user, err := s.userRepo.GetUserByEmail(ctx, email)
 	if err != nil {
 		return entity.User{}, fmt.Errorf("gagal mendapatkan pengguna berdasarkan ID: %v", err)
 	}

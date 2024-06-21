@@ -15,6 +15,11 @@ type userRepository struct {
 	nextID int           // ID berikutnya yang akan digunakan untuk pengguna baru
 }
 
+// GetUserByEmail implements service.IUserRepository.
+func (r *userRepository) GetUserByEmail(ctx context.Context, id string) (entity.User, error) {
+	panic("unimplemented")
+}
+
 // NewUserRepository membuat instance baru dari userRepository
 func NewUserRepository(db []entity.User) service.IUserRepository {
 	return &userRepository{

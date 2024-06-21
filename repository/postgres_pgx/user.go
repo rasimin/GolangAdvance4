@@ -24,6 +24,11 @@ type userRepository struct {
 	db PgxPoolIface
 }
 
+// GetUserByEmail implements service.IUserRepository.
+func (r *userRepository) GetUserByEmail(ctx context.Context, id string) (entity.User, error) {
+	panic("unimplemented")
+}
+
 func NewUserRepository(db PgxPoolIface) service.IUserRepository {
 	return &userRepository{db: db}
 }

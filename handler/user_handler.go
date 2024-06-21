@@ -15,6 +15,7 @@ import (
 type IUserHandler interface {
 	CreateUser(c *gin.Context)
 	GetUser(c *gin.Context)
+	GetUserByEmail(c *gin.Context)
 	UpdateUser(c *gin.Context)
 	DeleteUser(c *gin.Context)
 	GetAllUsers(c *gin.Context)
@@ -63,6 +64,17 @@ func (h *UserHandler) GetUser(c *gin.Context) {
 		return
 	}
 
+	c.JSON(http.StatusOK, user)
+}
+
+// GetUser menghandle permintaan untuk mendapatkan user berdasarkan ID
+func (h *UserHandler) GetUserByEmail(c *gin.Context) {
+	email := c.Param("email")
+	user, err := h.userService.GetUserByEmail(c.Request.Context(), email)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "User not found"})
+		return
+	}
 	c.JSON(http.StatusOK, user)
 }
 
