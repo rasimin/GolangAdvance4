@@ -16,6 +16,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/redis/go-redis/v9"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	"gorm.io/driver/postgres"
@@ -37,6 +38,12 @@ func main() {
 	//	log.Fatalln(err)
 	//}
 
+	rdb := redis.NewClient(&redis.Options{
+		Addr:     "localhost:6379", // alamat Redis server
+		Password: "",               // tidak ada password secara default
+		DB:       0,                // menggunakan default DB 0
+	})
+
 	// setup gorm connectoin
 	dsn := "postgresql://postgres:admin@localhost:5432/NewDB"
 	gormDB, err := gorm.Open(postgres.Open(dsn), &gorm.Config{SkipDefaultTransaction: true})
@@ -47,7 +54,7 @@ func main() {
 
 	// uncomment to use postgres gorm
 	userRepo := postgres_gorm.NewUserRepository(gormDB)
-	userService := service.NewUserService(userRepo)
+	userService := service.NewUserService(userRepo, rdb)
 	//userHandler := ginHandler.NewUserHandler(userService)
 	userHandler := grpcHandler.NewUserHandler(userService)
 

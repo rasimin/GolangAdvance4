@@ -3,7 +3,12 @@ package service
 import (
 	"advance2/entity"
 	"context"
+	"encoding/json"
 	"fmt"
+	"log"
+	"time"
+
+	"github.com/redis/go-redis/v9"
 )
 
 // IUserService mendefinisikan interface untuk layanan pengguna
@@ -29,11 +34,14 @@ type IUserRepository interface {
 // userService adalah implementasi dari IUserService yang menggunakan IUserRepository
 type userService struct {
 	userRepo IUserRepository
+	rdb      *redis.Client
 }
 
+const redisUserByIDKey = "user:%d"
+
 // NewUserService membuat instance baru dari userService
-func NewUserService(userRepo IUserRepository) IUserService {
-	return &userService{userRepo: userRepo}
+func NewUserService(userRepo IUserRepository, rdb *redis.Client) IUserService {
+	return &userService{userRepo: userRepo, rdb: rdb}
 }
 
 // CreateUser membuat pengguna baru
@@ -43,16 +51,41 @@ func (s *userService) CreateUser(ctx context.Context, user *entity.User) (entity
 	if err != nil {
 		return entity.User{}, fmt.Errorf("gagal membuat pengguna: %v", err)
 	}
+	redisKey := fmt.Sprintf(redisUserByIDKey, createdUser.ID)
+	createdUserJSON, err := json.Marshal(createdUser)
+	if err != nil {
+		log.Println("gagal marshal json")
+	}
+	if err := s.rdb.Set(ctx, redisKey, createdUserJSON, 60*time.Second).Err(); err != nil {
+		log.Println("error when set redis key", redisKey)
+	}
+
 	return createdUser, nil
 }
 
 // GetUserByID mendapatkan pengguna berdasarkan ID
 func (s *userService) GetUserByID(ctx context.Context, id int) (entity.User, error) {
 	// Memanggil GetUserByID dari repository untuk mendapatkan pengguna berdasarkan ID
-	user, err := s.userRepo.GetUserByID(ctx, id)
-	if err != nil {
-		return entity.User{}, fmt.Errorf("gagal mendapatkan pengguna berdasarkan ID: %v", err)
+	// cek data cache, kalau ada, ambil dari redis. kalau tidak ada, ambil dari repo
+	var user entity.User
+	redisKey := fmt.Sprintf(redisUserByIDKey, id)
+	val, err := s.rdb.Get(ctx, redisKey).Result()
+	if err == nil {
+		log.Println("data tersedia di redis")
+		err = json.Unmarshal([]byte(val), &user)
+		if err != nil {
+			log.Println("gagal marshall data di redis, coba ambil ke database")
+		}
 	}
+	if err != nil {
+		log.Println("data tidak tersedia di redis, ambil dari database")
+		user, err = s.userRepo.GetUserByID(ctx, id)
+		if err != nil {
+			log.Println("gagal ambil data di database")
+			return entity.User{}, fmt.Errorf("gagal mendapatkan pengguna berdasarkan ID: %v", err)
+		}
+	}
+
 	return user, nil
 }
 
@@ -78,6 +111,11 @@ func (s *userService) UpdateUser(ctx context.Context, id int, user entity.User) 
 
 // DeleteUser menghapus pengguna berdasarkan ID
 func (s *userService) DeleteUser(ctx context.Context, id int) error {
+	// Memanggil DeleteUser dari repository untuk menghapus pengguna berdasarkan ID
+	redisKey := fmt.Sprintf(redisUserByIDKey, id)
+	if err := s.rdb.Del(ctx).Err(); err != nil {
+		log.Println("gagal delete key redis", redisKey)
+	}
 	// Memanggil DeleteUser dari repository untuk menghapus pengguna berdasarkan ID
 	err := s.userRepo.DeleteUser(ctx, id)
 	if err != nil {
